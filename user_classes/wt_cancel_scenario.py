@@ -2,7 +2,7 @@ from locust import task, SequentialTaskSet, FastHttpUser, constant_pacing, event
 from config.config import cfg, logger
 import sys, re
 from utils.assertion import check_http_response
-from utils.non_test_methods import open_csv_field
+from utils.non_test_methods import open_csv_field, processCancelRequestBody
 import random
 from urllib.parse import unquote_plus
 
@@ -148,11 +148,35 @@ class PurchaseFlightTicket2(SequentialTaskSet): # класс с задачами
         ) as req_03_3_response:
             check_http_response(req_03_3_response, "Flights List")
 
+        self.flightsID = re.findall(r'name=\"flightID\" value=\"(.*)\"  />', req_03_3_response.text)
+        self.cgifields = re.findall(r'name=\".cgifields\" value=\"([0-9]{1,4})\"  />', req_03_3_response.text)
 
+        # logger.info(f'WebToursBaseClass started. Host: {self.flightsID}')
+        # logger.info(f'WebToursBaseClass started. Host: {self.cgifields}')
+
+    @task
+    def uc02_04_deleteTickets(self) -> None:
+
+        req_body_04_01 = processCancelRequestBody (self.flightsID, self.cgifields)
+        # logger.info(f'Body-Cancel-: {req_body_04_01}')
+
+        with self.client.post(
+                '/cgi-bin/itinerary.pl',
+                name='REQ02_04_1_/cgi-bin/itinerary.pl',
+                headers={
+                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'accept-encoding': 'gzip, deflate, br, zstd',
+                    'content-type': 'application/x-www-form-urlencoded'
+                },
+                data=req_body_04_01,
+                catch_response=True,
+                debug_stream=sys.stderr
+        ) as req_04_1_response:
+            check_http_response(req_04_1_response, f"Flights List")
 
 
 class WebToursCancelUserClass(FastHttpUser): # юзер-класс, принимающий в себя основные параметры теста
-    wait_time = constant_pacing(cfg.pacing)
+    wait_time = constant_pacing(cfg.webtours_cancel.pacing)
     host = cfg.url
 
     logger.info(f'WebToursBaseClass started. Host: {host}')
